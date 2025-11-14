@@ -11,12 +11,15 @@ const els = {
   cancelBtn     : document.getElementById('cancel_btn'),
   startScreen   : document.getElementById('start_screen'),
   startBtn      : document.getElementById('start_btn'),
-  quitBtn       : document.getElementById('quit_btn')
+  quitBtn       : document.getElementById('quit_btn'),
+  container     : document.querySelector('.container')
 };
 
 /* ====================  STATE  ==================== */
 let allQs = [], selQs = [], idx = 0, curQ = null;
 let correct = 0, quizStart = 0, qStart = 0, timerId = null, active = false;
+let dragged = null;               // the block being dragged
+let offsetX = 0, offsetY = 0;     // finger offset inside the block
 
 /* ====================  FETCH QUESTIONS  ==================== */
 fetch('questions.json')
@@ -26,7 +29,7 @@ fetch('questions.json')
 
 /* ====================  UTILS  ==================== */
 const shuffle = a => { for (let i = a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; };
-const fmt = s => (s < 10 ? '0' : '') + s;
+const fmt = n => (n < 10 ? '0' : '') + n;
 
 /* ====================  TIMER  ==================== */
 const startTimer = () => {
@@ -84,7 +87,7 @@ function loadQ(i) {
     b.className = 'answer-block';
     b.textContent = txt;
     b.dataset.idx = n;
-    b.draggable = true;                 // desktop fallback
+    b.draggable = true;
     els.answerPad.appendChild(b);
     initDrag(b);
   });
@@ -95,19 +98,20 @@ function loadQ(i) {
     s.className = 'slot';
     s.textContent = `Drop answer ${n + 1} here`;
     s.dataset.slot = n;
+    // allow drop on every slot
+    s.addEventListener('dragover', e => e.preventDefault());
+    s.addEventListener('drop', e => dropHandler(e));
     els.questionAns.appendChild(s);
   }
 
-  // allow dropping back into the pad
+  // allow dropping back into answer pad
   els.answerPad.addEventListener('dragover', e => e.preventDefault());
   els.answerPad.addEventListener('drop', e => dropHandler(e, true));
 }
 
-/* ====================  TOUCH + MOUSE DRAG  ==================== */
-let dragged = null;
-
+/* ====================  DRAG INITIALISATION  ==================== */
 function initDrag(el) {
-  // ---- mouse ----
+  /* ---- MOUSE (desktop fallback) ---- */
   el.addEventListener('dragstart', e => {
     dragged = el;
     el.classList.add('dragging');
@@ -118,44 +122,42 @@ function initDrag(el) {
     dragged = null;
   });
 
-  // ---- touch ----
-  let startX, startY;
+  /* ---- TOUCH ---- */
   el.addEventListener('touchstart', e => {
     const touch = e.touches[0];
-    startX = touch.clientX; startY = touch.clientY;
+    const rect = el.getBoundingClientRect();
+    offsetX = touch.clientX - rect.left;
+    offsetY = touch.clientY - rect.top;
     dragged = el;
     el.classList.add('dragging');
-    e.preventDefault();               // stop scroll
+    el.style.pointerEvents = 'none';   // let events pass through to slots
+    e.preventDefault();
   }, {passive:false});
 
   el.addEventListener('touchmove', e => {
     if (!dragged) return;
-    e.preventDefault();               // crucial for smooth drag
+    e.preventDefault();
     const touch = e.touches[0];
-    const rect = els.container.getBoundingClientRect();
-    const x = touch.clientX - rect.left;
-    const y = touch.clientY - rect.top;
-    dragged.style.position = 'fixed';
-    dragged.style.left = (x - dragged.offsetWidth/2) + 'px';
-    dragged.style.top  = (y - dragged.offsetHeight/2) + 'px';
-    dragged.style.pointerEvents = 'none';
+    const x = touch.clientX - offsetX;
+    const y = touch.clientY - offsetY;
+    dragged.style.transform = `translate(${x}px, ${y}px)`;
     dragged.style.zIndex = '1000';
   }, {passive:false});
 
-  el.addEventListener('touchend', () => {
+  el.addEventListener('touchend', e => {
     if (!dragged) return;
     dragged.classList.remove('dragging');
-    dragged.style.position = '';
-    dragged.style.left = dragged.style.top = '';
-    dragged.style.pointerEvents = '';
+    dragged.style.transform = '';
     dragged.style.zIndex = '';
+    dragged.style.pointerEvents = '';
 
-    // find drop target under the finger
-    const touch = event.changedTouches[0];
+    // find element under finger
+    const touch = e.changedTouches[0];
     const under = document.elementFromPoint(touch.clientX, touch.clientY);
     const slot = under?.closest('.slot');
     if (slot) dropHandler({target: slot});
     else dropHandler({target: els.answerPad}, true);
+
     dragged = null;
   });
 }
@@ -176,7 +178,7 @@ function dropHandler(e, toPad = false) {
   slot.textContent = '';
   slot.appendChild(dragged);
 
-  // all slots filled?
+  // check if all slots filled
   const filled = els.questionAns.querySelectorAll('.slot .answer-block').length;
   const total  = els.questionAns.querySelectorAll('.slot').length;
   if (filled === total) setTimeout(checkAnswer, 300);
@@ -197,7 +199,6 @@ function checkAnswer() {
     els.questionAns.classList.add('shake');
     setTimeout(() => {
       els.questionAns.classList.remove('shake');
-      // move blocks back
       els.questionAns.querySelectorAll('.answer-block').forEach(b => els.answerPad.appendChild(b));
       els.questionAns.querySelectorAll('.slot').forEach((s, i) => s.textContent = `Drop answer ${i+1} here`);
     }, 600);
