@@ -298,7 +298,7 @@
     "question": "Create a function that returns the ASCII code of character c",
     "answer_divs": 2,
     "answers": ["def ascii_code(c):", "def code(c):", "return ord(c)", "print(ord(c))", "return ascii(c)"],
-    "correct_order": [3, 4]
+    "correct_order": [0, 2]
   },
     {
       "question": "Multiply two numbers",
