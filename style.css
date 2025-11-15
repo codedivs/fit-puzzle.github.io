@@ -155,7 +155,7 @@ button:hover {
   flex-direction: column;
   gap: 14px;
   align-items: flex-start;
-  min-height: 30px;
+  min-height: 80px;
   padding: 14px;
   border: 2px dashed rgba(20,255,236,0.4);
   border-radius: 10px;
